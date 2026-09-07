@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Webhook Inspector</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #171a23;
+    --panel-2: #1e2230;
+    --border: #2a2f3f;
+    --text: #e6e8ef;
+    --muted: #8b90a3;
+    --accent: #5b8cff;
+    --accent-2: #38d39f;
+    --danger: #ff6470;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  header h1 {
+    font-size: 18px;
+    margin: 0;
+    font-weight: 600;
+  }
+  .bin-url-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+  }
+  .bin-url-box code {
+    font-family: var(--mono);
+    color: var(--accent-2);
+    font-size: 13px;
+  }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 7px 14px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  button.secondary {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+    display: inline-block;
+  }
+  .status-dot.live { background: var(--accent-2); box-shadow: 0 0 6px var(--accent-2); }
+  main {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    height: calc(100vh - 65px);
+  }
+  #req-list {
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+  }
+  .req-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .req-item:hover { background: var(--panel); }
+  .req-item.active { background: var(--panel-2); border-left: 3px solid var(--accent); }
+  .req-item .top-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .method-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--panel-2);
+    color: var(--accent);
+  }
+  .method-badge.POST { color: var(--accent-2); }
+  .method-badge.DELETE { color: var(--danger); }
+  .timestamp { color: var(--muted); font-size: 12px; }
+  .req-path { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 4px; word-break: break-all; }
+  #empty-state, #detail-empty {
+    color: var(--muted);
+    padding: 40px;
+    text-align: center;
+  }
+  #detail {
+    overflow-y: auto;
+    padding: 24px;
+  }
+  .detail-section {
+    margin-bottom: 20px;
+  }
+  .detail-section h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin: 0 0 8px 0;
+  }
+  pre, .kv-table {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+  }
+  .kv-table div { padding: 2px 0; }
+  .kv-key { color: var(--accent); }
+  .replay-box {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .replay-box input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .replay-result {
+    margin-top: 10px;
+  }
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Webhook Inspector</h1>
+  <div class="bin-url-box">
+    <span class="status-dot" id="status-dot"></span>
+    <code id="bin-url">creating bin…</code>
+    <button class="secondary" id="copy-btn">Copy</button>
+  </div>
+  <button class="secondary" id="new-bin-btn">New bin</button>
+</header>
+
+<main>
+  <div id="req-list">
+    <div id="empty-state">No requests captured yet. Send an HTTP request to the URL above.</div>
+  </div>
+  <div id="detail">
+    <div id="detail-empty">Select a request to see its details.</div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  const state = {
+    binID: null,
+    binURL: null,
+    requests: [],
+    selectedID: null,
+    es: null,
+  };
+
+  const els = {
+    binUrl: document.getElementById('bin-url'),
+    copyBtn: document.getElementById('copy-btn'),
+    newBinBtn: document.getElementById('new-bin-btn'),
+    reqList: document.getElementById('req-list'),
+    detail: document.getElementById('detail'),
+    statusDot: document.getElementById('status-dot'),
+    toast: document.getElementById('toast'),
+  };
+
+  function toast(msg) {
+    els.toast.textContent = msg;
+    els.toast.classList.add('show');
+    setTimeout(() => els.toast.classList.remove('show'), 1500);
+  }
+
+  function fullBinURL() {
+    return window.location.origin + state.binURL;
+  }
+
+  async function createBin() {
+    if (state.es) { state.es.close(); state.es = null; }
+    const res = await fetch('/api/bins', { method: 'POST' });
+    const data = await res.json();
+    state.binID = data.id;
+    state.binURL = data.url;
+    state.requests = [];
+    state.selectedID = null;
+    els.binUrl.textContent = fullBinURL();
+    renderList();
+    renderDetail();
+    await loadRequests();
+    connectStream();
+  }
+
+  async function loadRequests() {
+    const res = await fetch(`/api/bins/${state.binID}/requests`);
+    state.requests = await res.json() || [];
+    renderList();
+  }
+
+  function connectStream() {
+    els.statusDot.classList.remove('live');
+    const es = new EventSource(`/api/bins/${state.binID}/stream`);
+    es.addEventListener('request', (evt) => {
+      const req = JSON.parse(evt.data);
+      state.requests.unshift(req);
+      if (state.requests.length > 100) state.requests.pop();
+      renderList();
+      toast(`Captured ${req.method} request`);
+    });
+    es.onopen = () => els.statusDot.classList.add('live');
+    es.onerror = () => els.statusDot.classList.remove('live');
+    state.es = es;
+  }
+
+  function fmtTime(ts) {
+    const d = new Date(ts);
+    return d.toLocaleTimeString() + '.' + String(d.getMilliseconds()).padStart(3, '0');
+  }
+
+  function renderList() {
+    if (state.requests.length === 0) {
+      els.reqList.innerHTML = '<div id="empty-state">No requests captured yet. Send an HTTP request to the URL above.</div>';
+      return;
+    }
+    els.reqList.innerHTML = '';
+    for (const req of state.requests) {
+      const item = document.createElement('div');
+      item.className = 'req-item' + (req.id === state.selectedID ? ' active' : '');
+      item.innerHTML = `
+        <div class="top-line">
+          <span class="method-badge ${escapeHTML(req.method)}">${escapeHTML(req.method)}</span>
+          <span class="timestamp">${fmtTime(req.timestamp)}</span>
+        </div>
+        <div class="req-path">${escapeHTML(req.path)}</div>
+      `;
+      item.addEventListener('click', () => {
+        state.selectedID = req.id;
+        renderList();
+        renderDetail();
+      });
+      els.reqList.appendChild(item);
+    }
+  }
+
+  function escapeHTML(s) {
+    const div = document.createElement('div');
+    div.textContent = s == null ? '' : String(s);
+    return div.innerHTML;
+  }
+
+  function renderKV(obj) {
+    if (!obj || Object.keys(obj).length === 0) return '<div class="kv-table"><div>(none)</div></div>';
+    let html = '<div class="kv-table">';
+    for (const [k, v] of Object.entries(obj)) {
+      const val = Array.isArray(v) ? v.join(', ') : v;
+      html += `<div><span class="kv-key">${escapeHTML(k)}</span>: ${escapeHTML(val)}</div>`;
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderDetail() {
+    const req = state.requests.find(r => r.id === state.selectedID);
+    if (!req) {
+      els.detail.innerHTML = '<div id="detail-empty">Select a request to see its details.</div>';
+      return;
+    }
+    els.detail.innerHTML = `
+      <div class="detail-section">
+        <h3>Overview</h3>
+        <div class="kv-table">
+          <div><span class="kv-key">Method</span>: ${escapeHTML(req.method)}</div>
+          <div><span class="kv-key">Path</span>: ${escapeHTML(req.path)}</div>
+          <div><span class="kv-key">Time</span>: ${escapeHTML(new Date(req.timestamp).toString())}</div>
+          <div><span class="kv-key">Remote</span>: ${escapeHTML(req.remote_addr)}</div>
+        </div>
+      </div>
+      <div class="detail-section">
+        <h3>Query params</h3>
+        ${renderKV(req.query_params)}
+      </div>
+      <div class="detail-section">
+        <h3>Headers</h3>
+        ${renderKV(req.headers)}
+      </div>
+      <div class="detail-section">
+        <h3>Body ${req.body_truncated ? '(truncated at 1MB)' : ''}</h3>
+        <pre>${escapeHTML(req.body) || '(empty)'}</pre>
+      </div>
+      <div class="detail-section">
+        <h3>Replay to&hellip;</h3>
+        <div class="replay-box">
+          <input type="text" id="replay-target" placeholder="https://example.com/target-endpoint">
+          <button id="replay-btn">Replay</button>
+        </div>
+        <div class="replay-result" id="replay-result"></div>
+      </div>
+    `;
+
+    document.getElementById('replay-btn').addEventListener('click', () => doReplay(req.id));
+  }
+
+  async function doReplay(reqID) {
+    const input = document.getElementById('replay-target');
+    const resultEl = document.getElementById('replay-result');
+    const target = input.value.trim();
+    if (!target) { toast('Enter a target URL first'); return; }
+
+    resultEl.innerHTML = '<div class="kv-table"><div>Replaying&hellip;</div></div>';
+    try {
+      const res = await fetch(`/api/bins/${state.binID}/requests/${reqID}/replay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_url: target }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        resultEl.innerHTML = `<pre>Error: ${escapeHTML(data.error || res.statusText)}</pre>`;
+        return;
+      }
+      if (data.error) {
+        resultEl.innerHTML = `<pre>Error: ${escapeHTML(data.error)}</pre>`;
+        return;
+      }
+      resultEl.innerHTML = `
+        <div class="kv-table"><div><span class="kv-key">Status</span>: ${escapeHTML(data.status_text)}</div></div>
+        <div class="detail-section" style="margin-top:8px;">
+          <h3>Response headers</h3>
+          ${renderKV(data.headers)}
+        </div>
+        <div class="detail-section">
+          <h3>Response body</h3>
+          <pre>${escapeHTML(data.body) || '(empty)'}</pre>
+        </div>
+      `;
+    } catch (e) {
+      resultEl.innerHTML = `<pre>Error: ${escapeHTML(e.message)}</pre>`;
+    }
+  }
+
+  els.copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(fullBinURL()).then(() => toast('Copied!'));
+  });
+  els.newBinBtn.addEventListener('click', createBin);
+
+  createBin();
+})();
+</script>
+</body>
+</html>

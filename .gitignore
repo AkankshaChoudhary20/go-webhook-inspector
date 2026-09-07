@@ -1,0 +1,10 @@
+# Built binary
+/webhook-inspector
+/go-webhook-inspector
+
+# Editor/OS cruft
+.DS_Store
+
+# Go build/test artifacts
+*.test
+*.out
