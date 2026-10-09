@@ -57,6 +57,10 @@ automatically on load; copy the shown URL and send requests to it (e.g.
 `curl -X POST http://localhost:8080/in/<bin_id> -d '{"hello":"world"}'`) to
 see them appear live.
 
+If creating a bin or loading its requests fails, the page displays an error
+and a **Retry** button. Retry reuses a successfully created bin when only
+loading requests failed.
+
 ## Run without building
 
 ```sh
