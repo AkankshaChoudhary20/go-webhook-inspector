@@ -120,3 +120,5 @@ curl -s -X POST \
 - **Replay**: replays the original method/body to the given `target_url`
   with the original headers forwarded, minus `Host`, `Content-Length`, and
   `Connection`, which are not safe to forward verbatim to a new destination.
+
+Replay also strips standard hop-by-hop headers and any headers named by the original `Connection` header while preserving the request body and other headers.

@@ -219,11 +219,23 @@ func (s *Server) handleReplay(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to build replay request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	// Connection can name additional headers that belong only to the original hop.
+	skipHeaders := map[string]bool{
+		"host": true, "content-length": true, "connection": true,
+		"keep-alive": true, "proxy-authenticate": true, "proxy-authorization": true,
+		"te": true, "trailer": true, "transfer-encoding": true, "upgrade": true,
+	}
+	for name, vals := range captured.Headers {
+		if strings.EqualFold(name, "Connection") {
+			for _, value := range vals {
+				for _, token := range strings.Split(value, ",") {
+					skipHeaders[strings.ToLower(strings.TrimSpace(token))] = true
+				}
+			}
+		}
+	}
 	for k, vals := range captured.Headers {
-		lower := strings.ToLower(k)
-		// Skip hop-by-hop / connection-specific headers that must not be
-		// forwarded verbatim to a new destination.
-		if lower == "host" || lower == "content-length" || lower == "connection" {
+		if skipHeaders[strings.ToLower(k)] {
 			continue
 		}
 		for _, v := range vals {
