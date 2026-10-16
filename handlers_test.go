@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -54,5 +55,31 @@ func TestReplayStripsConnectionHeadersAndPreservesPayload(t *testing.T) {
 	}
 	if recorder.Code != http.StatusOK || result.Status != http.StatusCreated || result.Error != "" {
 		t.Fatalf("replay failed: %d %+v", recorder.Code, result)
+	}
+}
+
+func TestReplayRejectsTruncatedCapturedBodies(t *testing.T) {
+	original := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = original })
+	called := false
+	http.DefaultTransport = replayTransport(func(r *http.Request) (*http.Response, error) { called = true; return nil, fmt.Errorf("must not send") })
+	store := NewStore()
+	bin, err := store.CreateBin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddRequest(bin.id, &CapturedRequest{ID: "truncated", Method: "POST", Body: "partial", BodyTrunc: true}); err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	NewServer(store).Routes(mux)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/bins/"+bin.id+"/requests/truncated/replay", strings.NewReader(`{"target_url":"https://example.test"}`))
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("got status %d body %s", response.Code, response.Body.String())
+	}
+	if called {
+		t.Fatal("sent a partial captured request")
 	}
 }

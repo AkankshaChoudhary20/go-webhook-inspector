@@ -200,6 +200,11 @@ func (s *Server) handleReplay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if captured.BodyTrunc {
+		writeJSON(w, http.StatusConflict, replayResponse{Error: "Captured body was truncated; the original request cannot be replayed."})
+		return
+	}
+
 	var body replayRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
 		http.Error(w, "invalid JSON body: expected {\"target_url\": \"...\"}", http.StatusBadRequest)
