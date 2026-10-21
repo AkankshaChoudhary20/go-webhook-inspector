@@ -122,3 +122,9 @@ curl -s -X POST \
   `Connection`, which are not safe to forward verbatim to a new destination.
 
 Replay also strips standard hop-by-hop headers and any headers named by the original `Connection` header while preserving the request body and other headers.
+
+## Continuous integration
+
+CI selects the Go version from `go.mod`, runs `go vet ./...` and `go test -race -count=1 ./...`, and builds all packages.
+
+Checks run on pushes and pull requests and can be started manually from the Actions tab. The workflow has read-only repository permissions, cancels superseded runs, and stops after 15 minutes.
