@@ -248,7 +248,14 @@ func (s *Server) handleReplay(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		// Return the target's response; redirects can change POST to GET
+		// or repeat a request against a different endpoint.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	resp, err := client.Do(outReq)
 	if err != nil {
 		writeJSON(w, http.StatusOK, replayResponse{Error: err.Error()})
