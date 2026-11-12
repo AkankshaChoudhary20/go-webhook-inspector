@@ -206,8 +206,13 @@ func (s *Server) handleReplay(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body replayRequest
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16))
+	if err := decoder.Decode(&body); err != nil {
 		http.Error(w, "invalid JSON body: expected {\"target_url\": \"...\"}", http.StatusBadRequest)
+		return
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		http.Error(w, "expected exactly one JSON object", http.StatusBadRequest)
 		return
 	}
 	if body.TargetURL == "" {
