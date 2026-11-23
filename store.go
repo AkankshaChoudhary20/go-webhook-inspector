@@ -59,10 +59,11 @@ func newBin(id string) *bin {
 // at capacity (ring-buffer semantics over a newest-first slice).
 func (b *bin) add(req *CapturedRequest) {
 	b.mu.Lock()
-	b.requests = append([]*CapturedRequest{req}, b.requests...)
-	if len(b.requests) > MaxRequestsPerBin {
-		b.requests = b.requests[:MaxRequestsPerBin]
+	if len(b.requests) < MaxRequestsPerBin {
+		b.requests = append(b.requests, nil)
 	}
+	copy(b.requests[1:], b.requests)
+	b.requests[0] = req
 	b.mu.Unlock()
 
 	b.publish(req)
